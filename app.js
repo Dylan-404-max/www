@@ -2,7 +2,7 @@
 // Cloudflare Workers + D1 + Vanilla JS
 
 // ==================== CONFIGURATION ====================
-const API_BASE_URL = 'https://timberpro-api.kobayashifgk.workers.dev/'; // CHANGE THIS!
+const API_BASE_URL = 'https://timberpro-api.kobayashifgk.workers.dev'; // CHANGE THIS!
 const APP_VERSION = '1.0.0';
 const DB_NAME = 'TimberProDB';
 const DB_VERSION = 1;
