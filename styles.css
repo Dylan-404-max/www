@@ -791,3 +791,379 @@ body {
 .qty-preset:active {
     transform: scale(0.95);
 }
+
+/* ============================================
+   DASHBOARD & ANALYTICS FIXES
+   ============================================ */
+
+/* Better stat cards */
+.stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-left: 4px solid var(--primary);
+    transition: var(--transition);
+    min-height: 120px;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card.success { border-left-color: var(--success); }
+.stat-card.warning { border-left-color: var(--warning); }
+.stat-card.danger { border-left-color: var(--danger); }
+.stat-card.info { border-left-color: var(--info); }
+
+.stat-label {
+    font-size: 12px;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    font-family: var(--font-display);
+    line-height: 1.2;
+}
+
+.stat-change {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.stat-change.up { color: var(--success); }
+.stat-change.down { color: var(--danger); }
+
+/* Chart improvements */
+.bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 200px;
+    padding: 16px 8px 30px;
+    position: relative;
+}
+
+.bar-chart-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 36px;
+}
+
+.bar-chart-bar {
+    width: 100%;
+    background: linear-gradient(to top, var(--primary), var(--primary-light));
+    border-radius: 4px 4px 0 0;
+    transition: height 0.5s ease;
+    min-height: 4px;
+    position: relative;
+}
+
+.bar-chart-bar:hover {
+    opacity: 0.8;
+}
+
+.bar-chart-label {
+    font-size: 11px;
+    color: var(--text-light);
+    text-align: center;
+}
+
+.bar-chart-value {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Pie chart */
+.pie-chart {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    position: relative;
+    margin: 0 auto;
+    box-shadow: inset 0 0 0 8px white;
+}
+
+.pie-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    justify-content: center;
+}
+
+.pie-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.pie-legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+}
+
+/* Notification modal items */
+.notification-item {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-light);
+    transition: var(--transition);
+}
+
+.notification-item:hover {
+    background: var(--bg);
+}
+
+.notification-item.unread {
+    background: var(--info-light);
+    border-left: 3px solid var(--info);
+}
+
+/* Better empty states */
+.empty-state {
+    text-align: center;
+    padding: 48px 20px;
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.empty-text {
+    font-size: 14px;
+    color: var(--text-light);
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+/* Card improvements */
+.card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: var(--transition);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.card-subtitle {
+    font-size: 12px;
+    color: var(--text-light);
+}
+
+/* KPI grid */
+.grid-4 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 768px) {
+    .grid-4 {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 16px;
+    }
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+@media (min-width: 640px) {
+    .grid-2 {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* Responsive table */
+@media (max-width: 640px) {
+    .table-responsive .table thead {
+        display: none;
+    }
+
+    .table-responsive .table tr {
+        display: block;
+        margin-bottom: 12px;
+        background: white;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-sm);
+        padding: 16px;
+    }
+
+    .table-responsive .table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-light);
+    }
+
+    .table-responsive .table td:last-child {
+        border-bottom: none;
+    }
+
+    .table-responsive .table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--text-light);
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+}
+
+/* Cart improvements */
+.cart-section {
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    border: 2px solid var(--border-light);
+    margin-top: 16px;
+}
+
+.cart-header {
+    padding: 16px 20px;
+    background: var(--bg);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cart-header:active {
+    background: var(--border-light);
+}
+
+.cart-body {
+    padding: 0 20px 20px;
+}
+
+/* Product grid */
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    min-height: 200px;
+}
+
+@media (min-width: 480px) {
+    .product-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 768px) {
+    .product-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Toast improvements */
+.toast-container {
+    position: fixed;
+    bottom: 80px;
+    left: 16px;
+    right: 16px;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+@media (min-width: 768px) {
+    .toast-container {
+        left: auto;
+        right: 24px;
+        width: 360px;
+    }
+}
+
+.toast {
+    background: var(--text);
+    color: white;
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+    animation: toastIn 0.3s ease;
+}
+
+.toast.success {
+    background: var(--success);
+}
+
+.toast.error {
+    background: var(--danger);
+}
+
+.toast.warning {
+    background: var(--warning);
+    color: var(--text);
+}
+
+.toast.info {
+    background: var(--info);
+}
+
+@keyframes toastIn {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
