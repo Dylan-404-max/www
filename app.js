@@ -508,88 +508,141 @@ function renderDashboard() {
 }
 
 async function initDashboardPage() {
-    const result = await API.get('/analytics/dashboard');
-    if (!result.success) {
-        showToast('Failed to load dashboard', 'error');
-        return;
-    }
+    try {
+        const result = await API.get('/analytics/dashboard');
+        if (!result.success) {
+            showToast('Failed to load dashboard: ' + (result.error || 'Unknown error'), 'error');
+            // Show error state in cards
+            document.getElementById('stat-today-sales').textContent = 'Error';
+            document.getElementById('stat-month-sales').textContent = 'Error';
+            document.getElementById('stat-expenses').textContent = 'Error';
+            document.getElementById('stat-low-stock').textContent = 'Error';
+            return;
+        }
 
-    const data = result.dashboard;
+        const data = result.dashboard;
 
-    document.getElementById('stat-today-sales').textContent = formatCurrency(data.today_sales.total);
-    document.getElementById('stat-today-count').textContent = `${data.today_sales.count} transactions`;
-    document.getElementById('stat-month-sales').textContent = formatCurrency(data.month_sales.total);
-    document.getElementById('stat-expenses').textContent = formatCurrency(data.month_expenses.total);
-    document.getElementById('stat-low-stock').textContent = data.low_stock_count;
+        document.getElementById('stat-today-sales').textContent = formatCurrency(data.today_sales?.total || 0);
+        document.getElementById('stat-today-count').textContent = (data.today_sales?.count || 0) + ' transactions';
+        document.getElementById('stat-month-sales').textContent = formatCurrency(data.month_sales?.total || 0);
+        document.getElementById('stat-expenses').textContent = formatCurrency(data.month_expenses?.total || 0);
+        document.getElementById('stat-low-stock').textContent = data.low_stock_count || 0;
 
-    // Render sales chart
-    if (data.sales_chart && data.sales_chart.length > 0) {
-        const maxVal = Math.max(...data.sales_chart.map(d => d.total));
-        const chartHtml = `
-            <div class="bar-chart">
-                ${data.sales_chart.map(d => `
-                    <div class="bar-chart-item">
-                        <div class="bar-chart-bar" style="height: ${maxVal > 0 ? (d.total / maxVal * 100) : 0}%"></div>
-                        <div class="bar-chart-label">${new Date(d.date).getDate()}</div>
-                        <div class="bar-chart-value">${formatCurrency(d.total)}</div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        document.getElementById('sales-chart').innerHTML = chartHtml;
-    }
-
-    // Render payment breakdown
-    if (data.payment_breakdown && data.payment_breakdown.length > 0) {
-        const colors = ['#1a5f4a', '#f4a261', '#e76f51', '#74b9ff'];
-        const total = data.payment_breakdown.reduce((sum, p) => sum + p.total, 0);
-        let currentAngle = 0;
-
-        const pieHtml = `
-            <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
-                <div class="pie-chart" style="background: conic-gradient(${data.payment_breakdown.map((p, i) => {
-                    const angle = (p.total / total) * 360;
-                    const start = currentAngle;
-                    currentAngle += angle;
-                    return `${colors[i % colors.length]} ${start}deg ${currentAngle}deg`;
-                }).join(', ')}"></div>
-                <div class="pie-chart-legend">
-                    ${data.payment_breakdown.map((p, i) => `
-                        <div class="pie-legend-item">
-                            <div class="pie-legend-color" style="background: ${colors[i % colors.length]}"></div>
-                            <span>${p.payment_method}: ${formatCurrency(p.total)} (${p.count})</span>
+        // Render sales chart
+        if (data.sales_chart && data.sales_chart.length > 0) {
+            const maxVal = Math.max(...data.sales_chart.map(d => d.total || 0));
+            const chartHtml = `
+                <div class="bar-chart" style="padding: 16px 8px;">
+                    ${data.sales_chart.map(d => `
+                        <div class="bar-chart-item" style="flex: 1; min-width: 36px;">
+                            <div style="font-size: 10px; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${formatCurrency(d.total).replace('GHS ', '')}</div>
+                            <div class="bar-chart-bar" style="height: ${maxVal > 0 ? (d.total / maxVal * 140) : 4}px; background: linear-gradient(to top, var(--primary), var(--primary-light)); border-radius: 4px 4px 0 0; min-height: 4px;"></div>
+                            <div class="bar-chart-label" style="margin-top: 6px; font-size: 11px; color: var(--text-light);">${new Date(d.date).getDate()}/${new Date(d.date).getMonth()+1}</div>
                         </div>
                     `).join('')}
                 </div>
-            </div>
-        `;
-        document.getElementById('payment-chart').innerHTML = pieHtml;
-    }
+            `;
+            document.getElementById('sales-chart').innerHTML = chartHtml;
+        } else {
+            document.getElementById('sales-chart').innerHTML = `
+                <div class="empty-state" style="padding: 32px;">
+                    <div class="empty-icon" style="font-size: 32px;">&#128202;</div>
+                    <div class="empty-text">No sales data yet</div>
+                </div>
+            `;
+        }
 
-    // Render top products
-    if (data.top_products && data.top_products.length > 0) {
-        const tableHtml = `
-            <div class="table-container table-responsive">
-                <table class="table">
-                    <thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue</th></tr></thead>
-                    <tbody>
-                        ${data.top_products.map(p => `
-                            <tr>
-                                <td data-label="Product">${escapeHtml(p.name)}</td>
-                                <td data-label="Qty">${p.total_qty}</td>
-                                <td data-label="Revenue">${formatCurrency(p.total_revenue)}</td>
-                            </tr>
+        // Render payment breakdown
+        if (data.payment_breakdown && data.payment_breakdown.length > 0) {
+            const colors = ['#1a5f4a', '#f4a261', '#e76f51', '#74b9ff'];
+            const total = data.payment_breakdown.reduce((sum, p) => sum + (p.total || 0), 0);
+            let currentAngle = 0;
+
+            const pieHtml = `
+                <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap; justify-content: center; padding: 16px;">
+                    <div class="pie-chart" style="width: 140px; height: 140px; border-radius: 50%; background: conic-gradient(${data.payment_breakdown.map((p, i) => {
+                        const angle = (p.total / total) * 360;
+                        const start = currentAngle;
+                        currentAngle += angle;
+                        return `${colors[i % colors.length]} ${start}deg ${currentAngle}deg`;
+                    }).join(', ')}); box-shadow: inset 0 0 0 8px white;"></div>
+                    <div class="pie-chart-legend" style="display: flex; flex-direction: column; gap: 10px;">
+                        ${data.payment_breakdown.map((p, i) => `
+                            <div class="pie-legend-item" style="display: flex; align-items: center; gap: 8px;">
+                                <div class="pie-legend-color" style="background: ${colors[i % colors.length]}; width: 16px; height: 16px; border-radius: 4px;"></div>
+                                <span style="font-size: 13px; font-weight: 500;">${p.payment_method.toUpperCase()}: ${formatCurrency(p.total)} (${Math.round(p.total/total*100)}%) - ${p.count} sales</span>
+                            </div>
                         `).join('')}
-                    </tbody>
-                </table>
+                    </div>
+                </div>
+            `;
+            document.getElementById('payment-chart').innerHTML = pieHtml;
+        } else {
+            document.getElementById('payment-chart').innerHTML = `
+                <div class="empty-state" style="padding: 32px;">
+                    <div class="empty-icon" style="font-size: 32px;">&#128179;</div>
+                    <div class="empty-text">No payment data yet</div>
+                </div>
+            `;
+        }
+
+        // Render top products
+        if (data.top_products && data.top_products.length > 0) {
+            const tableHtml = `
+                <div class="table-container table-responsive">
+                    <table class="table">
+                        <thead><tr><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead>
+                        <tbody>
+                            ${data.top_products.map(p => `
+                                <tr>
+                                    <td data-label="Product">${escapeHtml(p.name)}</td>
+                                    <td data-label="Qty">${p.total_qty || 0}</td>
+                                    <td data-label="Revenue">${formatCurrency(p.total_revenue || 0)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            document.getElementById('top-products-table').innerHTML = tableHtml;
+        } else {
+            document.getElementById('top-products-table').innerHTML = `
+                <div class="empty-state" style="padding: 32px;">
+                    <div class="empty-icon" style="font-size: 32px;">&#127795;</div>
+                    <div class="empty-text">No product sales yet</div>
+                </div>
+            `;
+        }
+
+        // Recent activity placeholder
+        document.getElementById('recent-activity').innerHTML = `
+            <div style="padding: 16px;">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px;">
+                        <div style="font-size: 24px;">&#128722;</div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px;">Sales Activity</div>
+                            <div style="font-size: 12px; color: var(--text-light);">${data.today_sales?.count || 0} sales today</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px;">
+                        <div style="font-size: 24px;">&#128203;</div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px;">Pending Orders</div>
+                            <div style="font-size: 12px; color: var(--text-light);">${data.pending_orders || 0} orders awaiting delivery</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
-        document.getElementById('top-products-table').innerHTML = tableHtml;
-    }
 
-    // Low stock alerts
-    if (data.low_stock_items && data.low_stock_items.length > 0) {
-        showToast(`${data.low_stock_items.length} products are low on stock!`, 'warning', 5000);
+        // Low stock alerts
+        if (data.low_stock_items && data.low_stock_items.length > 0) {
+            showToast(data.low_stock_items.length + ' products are low on stock!', 'warning', 5000);
+        }
+    } catch (error) {
+        console.error('Dashboard error:', error);
+        showToast('Error loading dashboard', 'error');
     }
 }
 
@@ -602,13 +655,13 @@ function renderSales() {
                 <p class="page-subtitle">Tap products to add to cart</p>
             </div>
             <div id="cart-badge" style="background: var(--primary); color: white; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 14px; display: none;">
-                🛒 <span id="cart-badge-count">0</span> items
+                <span style="margin-right:4px;">&#128722;</span> <span id="cart-badge-count">0</span> items
             </div>
         </div>
 
         <!-- Products Section -->
         <div class="sales-search" style="margin-bottom: 16px;">
-            <span class="search-icon">🔍</span>
+            <span class="search-icon">&#128269;</span>
             <input type="text" id="product-search" placeholder="Search products & services..." autocomplete="off">
         </div>
         <div id="product-results" class="product-grid" style="margin-bottom: 20px; min-height: 200px;"></div>
@@ -617,20 +670,20 @@ function renderSales() {
         <div class="cart-section" id="cart-section">
             <div class="cart-header" onclick="toggleCart()" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding-bottom: 12px; border-bottom: 2px solid var(--border-light);">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 20px;">🛒</span>
+                    <span style="font-size: 20px;">&#128722;</span>
                     <h3 style="font-size: 16px; font-weight: 600; margin: 0;">Cart</h3>
                     <span id="cart-count-badge" style="background: var(--primary); color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700;">0</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span id="cart-header-total" style="font-weight: 700; color: var(--primary); font-size: 16px;">GHS 0.00</span>
-                    <span id="cart-toggle-icon" style="font-size: 18px; transition: transform 0.2s;">▼</span>
+                    <span id="cart-toggle-icon" style="font-size: 18px; transition: transform 0.2s;">&#9660;</span>
                 </div>
             </div>
 
             <div id="cart-body" class="cart-body" style="padding-top: 12px;">
                 <div id="cart-items" class="cart-items" style="max-height: 250px; overflow-y: auto;">
                     <div class="empty-state" style="padding: 16px;">
-                        <div class="empty-icon" style="font-size: 28px;">🛒</div>
+                        <div class="empty-icon" style="font-size: 28px;">&#128722;</div>
                         <div class="empty-text" style="font-size: 13px;">Tap products above to add items</div>
                     </div>
                 </div>
@@ -642,11 +695,11 @@ function renderSales() {
 
                 <div class="payment-methods" style="margin-top: 12px;">
                     <div class="payment-method selected" data-method="cash" onclick="selectPayment(this)">
-                        <div class="method-icon">💵</div>
+                        <div class="method-icon">&#128181;</div>
                         <div class="method-name">Cash</div>
                     </div>
                     <div class="payment-method" data-method="momo" onclick="selectPayment(this)">
-                        <div class="method-icon">📱</div>
+                        <div class="method-icon">&#128241;</div>
                         <div class="method-name">Mobile Money</div>
                     </div>
                 </div>
@@ -660,7 +713,7 @@ function renderSales() {
 
                 <div class="cart-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
                     <button onclick="saveDraft()" class="btn btn-outline" style="padding: 12px; font-size: 14px;">Save Draft</button>
-                    <button onclick="completeSale()" class="btn btn-success" style="padding: 12px; font-size: 14px;">✅ Complete Sale</button>
+                    <button onclick="completeSale()" class="btn btn-success" style="padding: 12px; font-size: 14px;">Complete Sale</button>
                 </div>
             </div>
         </div>
@@ -744,6 +797,18 @@ function renderProductGrid(productList, serviceList) {
 }
 
 function addToCart(type, id, name, price, unit) {
+    // For services, allow custom pricing
+    if (type === 'service') {
+        const customPrice = prompt(`Enter price for ${name} (default: ${price}):`, price);
+        if (customPrice === null) return; // User cancelled
+        const parsedPrice = parseFloat(customPrice);
+        if (isNaN(parsedPrice) || parsedPrice <= 0) {
+            showToast('Invalid price', 'error');
+            return;
+        }
+        price = parsedPrice;
+    }
+
     const existing = cart.find(c => c.id === id && c.type === type);
 
     if (existing) {
@@ -754,7 +819,7 @@ function addToCart(type, id, name, price, unit) {
 
     updateCartUI();
     renderProductGrid(products, services);
-    showToast(`${name} added to cart`, 'success', 1500);
+    showToast(name + ' added to cart', 'success', 1500);
 }
 
 function updateCartItemQuantity(index, delta) {
@@ -839,8 +904,24 @@ function toggleCart() {
 }
 
 function setCartQty(index, qty) {
+    cart[index].quantity += qty;
+    if (cart[index].quantity <= 0) {
+        cart.splice(index, 1);
+    }
+    updateCartUI();
+    renderProductGrid(products, services);
+}
+
+function manualCartQty(index, value) {
+    const qty = parseFloat(value);
+    if (isNaN(qty) || qty <= 0) {
+        showToast('Invalid quantity', 'error');
+        updateCartUI();
+        return;
+    }
     cart[index].quantity = qty;
     updateCartUI();
+    renderProductGrid(products, services);
 }
 
 function selectPayment(el) {
@@ -867,18 +948,23 @@ async function completeSale() {
         unit_price: item.price
     }));
 
+    // Use current date/time for sale tracking
+    const now = new Date();
+    const saleDate = now.toISOString();
+
     const saleData = {
         items,
         payment_method: paymentMethod,
         customer_name: customerName || null,
-        notes: notes || null
+        notes: notes || null,
+        sale_date: saleDate
     };
 
     showLoading(true);
 
     if (!isOnline) {
         // Queue for offline sync
-        await offlineDB.addToQueue({ data: saleData });
+        await offlineDB.addToQueue({ data: saleData, created_at: saleDate });
         showLoading(false);
         showToast('Sale queued for sync (offline)', 'warning');
         clearCart();
@@ -892,7 +978,7 @@ async function completeSale() {
 
     if (result.success) {
         showToast('Sale completed! Invoice: ' + result.invoice_number, 'success');
-        showInvoice(result.invoice_number, result.sale_id);
+        showInvoice(result.invoice_number, result.sale_id, saleDate);
         clearCart();
         document.getElementById('customer-name').value = '';
         document.getElementById('sale-notes').value = '';
@@ -1593,17 +1679,30 @@ async function submitService(e, serviceId) {
 }
 
 async function editService(id) {
-    const result = await API.get(`/services/${id}`);
-    if (result.success && result.service) {
-        showServiceForm(result.service);
+    // Find service in local array first (faster)
+    let service = services.find(s => s.id === id);
+    if (!service) {
+        const result = await API.get(`/services/${id}`);
+        if (result.success && result.service) {
+            service = result.service;
+        }
+    }
+    if (service) {
+        showServiceForm(service);
+    } else {
+        showToast('Service not found', 'error');
     }
 }
 
 async function toggleService(id, active) {
+    showLoading(true);
     const result = await API.put(`/services/${id}`, { is_active: active ? 1 : 0 });
+    showLoading(false);
     if (result.success) {
-        showToast(`Service ${active ? 'enabled' : 'disabled'}`, 'success');
+        showToast('Service ' + (active ? 'enabled' : 'disabled'), 'success');
         loadServices();
+    } else {
+        showToast(result.error || 'Failed to update service', 'error');
     }
 }
 
@@ -3133,4 +3232,85 @@ const savedApiUrl = localStorage.getItem('api_base_url');
 if (savedApiUrl) {
     // Note: In a real app, we'd update the API_BASE_URL variable
     console.log('Saved API URL:', savedApiUrl);
+}
+
+async function loadNotifications() {
+    const result = await API.get('/notifications');
+    if (!result.success) {
+        showToast('Failed to load notifications', 'error');
+        return;
+    }
+
+    const notifs = result.notifications || [];
+    const unreadCount = notifs.filter(n => !n.is_read).length;
+
+    // Update badge
+    const badge = document.getElementById('notification-badge');
+    if (badge) {
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    // Show modal with notifications
+    let content = `
+        <div class="modal-header">
+            <div class="modal-title">&#128276; Notifications</div>
+            <button class="modal-close" onclick="closeModal()">&#10005;</button>
+        </div>
+        <div style="max-height: 400px; overflow-y: auto;">
+    `;
+
+    if (notifs.length === 0) {
+        content += `
+            <div class="empty-state" style="padding: 32px;">
+                <div class="empty-icon" style="font-size: 40px;">&#128276;</div>
+                <div class="empty-title">No Notifications</div>
+                <div class="empty-text">You're all caught up!</div>
+            </div>
+        `;
+    } else {
+        const typeIcons = { sale: '&#128176;', order: '&#128230;', stock: '&#9888;', system: '&#128295;', summary: '&#128200;' };
+        content += notifs.map(n => `
+            <div style="padding: 16px; border-bottom: 1px solid var(--border-light); ${n.is_read ? 'opacity: 0.7;' : 'background: var(--info-light);'}">
+                <div style="display: flex; align-items: start; gap: 12px;">
+                    <div style="font-size: 24px;">${typeIcons[n.type] || '&#128276;'}</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 14px;">${escapeHtml(n.title)}</div>
+                        <div style="font-size: 13px; color: var(--text-light); margin-top: 4px;">${escapeHtml(n.message)}</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">${formatDateTime(n.created_at)}</div>
+                    </div>
+                    ${!n.is_read ? `<button onclick="markNotificationRead(${n.id})" style="background: var(--primary); color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;">Mark read</button>` : '<span style="font-size: 11px; color: var(--success);">&#10003; Read</span>'}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    content += '</div>';
+    openModal(content, true);
+}
+
+async function markNotificationRead(id) {
+    const result = await API.put(`/notifications/${id}/read`, {});
+    if (result.success) {
+        await loadNotifications();
+    }
+}
+
+async function updateNotificationBadge() {
+    const result = await API.get('/notifications/unread-count');
+    if (result.success) {
+        const badge = document.getElementById('notification-badge');
+        if (badge) {
+            if (result.count > 0) {
+                badge.textContent = result.count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    }
 }
