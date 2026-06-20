@@ -2,7 +2,7 @@
 // Cloudflare Workers + D1 + Vanilla JS
 
 // ==================== CONFIGURATION ====================
-const API_BASE_URL = 'https://timberpro-api.kobayashifgk.workers.dev'; // CHANGE THIS!
+const API_BASE_URL = 'https://your-worker-url.workers.dev'; // CHANGE THIS!
 const APP_VERSION = '1.0.0';
 const DB_NAME = 'TimberProDB';
 const DB_VERSION = 1;
@@ -599,31 +599,47 @@ function renderSales() {
         <div class="page-header">
             <div>
                 <h1 class="page-title">New Sale</h1>
-                <p class="page-subtitle">Quick sales interface</p>
+                <p class="page-subtitle">Tap products to add to cart</p>
+            </div>
+            <div id="cart-badge" style="background: var(--primary); color: white; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 14px; display: none;">
+                🛒 <span id="cart-badge-count">0</span> items
             </div>
         </div>
-        <div class="sales-container">
-            <div class="sales-search">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="product-search" placeholder="Search products & services..." autocomplete="off">
-            </div>
-            <div id="product-results" class="product-grid"></div>
 
-            <div class="cart-section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3 style="font-size: 16px; font-weight: 600;">🛒 Cart</h3>
-                    <button onclick="clearCart()" class="btn btn-ghost btn-small">Clear</button>
+        <!-- Products Section -->
+        <div class="sales-search" style="margin-bottom: 16px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="product-search" placeholder="Search products & services..." autocomplete="off">
+        </div>
+        <div id="product-results" class="product-grid" style="margin-bottom: 20px; min-height: 200px;"></div>
+
+        <!-- Cart Section - Collapsible on mobile -->
+        <div class="cart-section" id="cart-section">
+            <div class="cart-header" onclick="toggleCart()" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding-bottom: 12px; border-bottom: 2px solid var(--border-light);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">🛒</span>
+                    <h3 style="font-size: 16px; font-weight: 600; margin: 0;">Cart</h3>
+                    <span id="cart-count-badge" style="background: var(--primary); color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700;">0</span>
                 </div>
-                <div id="cart-items" class="cart-items">
-                    <div class="empty-state" style="padding: 24px;">
-                        <div class="empty-icon" style="font-size: 32px;">🛒</div>
-                        <div class="empty-text">Add items to cart</div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span id="cart-header-total" style="font-weight: 700; color: var(--primary); font-size: 16px;">GHS 0.00</span>
+                    <span id="cart-toggle-icon" style="font-size: 18px; transition: transform 0.2s;">▼</span>
+                </div>
+            </div>
+
+            <div id="cart-body" class="cart-body" style="padding-top: 12px;">
+                <div id="cart-items" class="cart-items" style="max-height: 250px; overflow-y: auto;">
+                    <div class="empty-state" style="padding: 16px;">
+                        <div class="empty-icon" style="font-size: 28px;">🛒</div>
+                        <div class="empty-text" style="font-size: 13px;">Tap products above to add items</div>
                     </div>
                 </div>
-                <div class="cart-summary">
+
+                <div class="cart-summary" style="border-top: 2px solid var(--border-light); padding-top: 12px; margin-top: 12px;">
                     <div class="cart-summary-row"><span>Subtotal</span><span id="cart-subtotal">GHS 0.00</span></div>
                     <div class="cart-summary-row total"><span>Total</span><span id="cart-total">GHS 0.00</span></div>
                 </div>
+
                 <div class="payment-methods" style="margin-top: 12px;">
                     <div class="payment-method selected" data-method="cash" onclick="selectPayment(this)">
                         <div class="method-icon">💵</div>
@@ -634,15 +650,17 @@ function renderSales() {
                         <div class="method-name">Mobile Money</div>
                     </div>
                 </div>
-                <div class="form-group" style="margin-top: 12px;">
+
+                <div class="form-group" style="margin-top: 12px; margin-bottom: 8px;">
                     <input type="text" id="customer-name" placeholder="Customer name (optional)" style="font-size: 14px; padding: 10px 14px;">
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="margin-bottom: 8px;">
                     <input type="text" id="sale-notes" placeholder="Notes (optional)" style="font-size: 14px; padding: 10px 14px;">
                 </div>
-                <div class="cart-actions">
-                    <button onclick="saveDraft()" class="btn btn-outline">Save Draft</button>
-                    <button onclick="completeSale()" class="btn btn-success btn-large">Complete Sale</button>
+
+                <div class="cart-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
+                    <button onclick="saveDraft()" class="btn btn-outline" style="padding: 12px; font-size: 14px;">Save Draft</button>
+                    <button onclick="completeSale()" class="btn btn-success" style="padding: 12px; font-size: 14px;">✅ Complete Sale</button>
                 </div>
             </div>
         </div>
@@ -762,12 +780,25 @@ function clearCart() {
 
 function updateCartUI() {
     const container = document.getElementById('cart-items');
+    const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const subtotal = cart.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+
+    // Update header badge
+    const countBadge = document.getElementById('cart-count-badge');
+    const headerTotal = document.getElementById('cart-header-total');
+    const cartBadge = document.getElementById('cart-badge');
+    const cartBadgeCount = document.getElementById('cart-badge-count');
+
+    if (countBadge) countBadge.textContent = totalItems;
+    if (headerTotal) headerTotal.textContent = formatCurrency(subtotal);
+    if (cartBadge) cartBadge.style.display = totalItems > 0 ? 'inline-block' : 'none';
+    if (cartBadgeCount) cartBadgeCount.textContent = totalItems;
 
     if (cart.length === 0) {
         container.innerHTML = `
-            <div class="empty-state" style="padding: 24px;">
-                <div class="empty-icon" style="font-size: 32px;">🛒</div>
-                <div class="empty-text">Add items to cart</div>
+            <div class="empty-state" style="padding: 16px;">
+                <div class="empty-icon" style="font-size: 28px;">🛒</div>
+                <div class="empty-text" style="font-size: 13px;">Tap products above to add items</div>
             </div>
         `;
     } else {
@@ -791,9 +822,20 @@ function updateCartUI() {
         `).join('');
     }
 
-    const subtotal = cart.reduce((sum, item) => sum + (item.quantity * item.price), 0);
     document.getElementById('cart-subtotal').textContent = formatCurrency(subtotal);
     document.getElementById('cart-total').textContent = formatCurrency(subtotal);
+}
+
+function toggleCart() {
+    const body = document.getElementById('cart-body');
+    const icon = document.getElementById('cart-toggle-icon');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.style.transform = 'rotate(0deg)';
+    } else {
+        body.style.display = 'none';
+        icon.style.transform = 'rotate(-90deg)';
+    }
 }
 
 function setCartQty(index, qty) {
@@ -2885,18 +2927,30 @@ function showUserForm(user = null) {
 
 async function submitUser(e, userId) {
     e.preventDefault();
+
+    const roleId = document.getElementById('user-role').value;
+    if (!roleId || isNaN(parseInt(roleId))) {
+        showToast('Please select a role', 'error');
+        return;
+    }
+
     const data = {
         username: document.getElementById('user-username').value,
         full_name: document.getElementById('user-fullname').value,
         email: document.getElementById('user-email').value || null,
         phone: document.getElementById('user-phone').value || null,
-        role_id: parseInt(document.getElementById('user-role').value),
+        role_id: parseInt(roleId),
         branch_id: document.getElementById('user-branch').value ? parseInt(document.getElementById('user-branch').value) : null,
         is_active: document.getElementById('user-active').checked ? 1 : 0
     };
 
     if (!userId) {
-        data.password = document.getElementById('user-password').value;
+        const password = document.getElementById('user-password').value;
+        if (!password || password.length < 6) {
+            showToast('Password must be at least 6 characters', 'error');
+            return;
+        }
+        data.password = password;
     }
 
     showLoading(true);
