@@ -193,6 +193,16 @@ async function login(username, password) {
         updateSidebarUser();
         filterNavByPermissions();
         showToast('Welcome back!', 'success');
+
+        // Request browser notification permission
+        requestNotificationPermission().then(granted => {
+            if (granted) {
+                showBrowserNotification('TimberPro', 'Welcome! You will receive notifications for sales, orders, and low stock alerts.');
+            }
+        });
+
+        // Start periodic notification check
+        setInterval(checkNotifications, 30000); // Check every 30 seconds
     } else {
         const errorEl = document.getElementById('login-error');
         errorEl.textContent = result.error || 'Login failed';
@@ -449,31 +459,36 @@ async function syncQueuedSales() {
 
 // ==================== DASHBOARD ====================
 function renderDashboard() {
+    const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+
     return `
         <div class="page-header">
             <div>
                 <h1 class="page-title">Dashboard</h1>
-                <p class="page-subtitle">Overview of your business</p>
+                <p class="page-subtitle">${today} &#8226; Overview of your business</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="loadPage('sales')" class="btn btn-primary btn-small">&#128722; New Sale</button>
             </div>
         </div>
         <div class="grid-4" id="dashboard-stats">
             <div class="stat-card">
-                <div class="stat-label">Today's Sales</div>
+                <div class="stat-label">&#128176; Today's Sales</div>
                 <div class="stat-value" id="stat-today-sales">Loading...</div>
                 <div class="stat-change" id="stat-today-count">0 transactions</div>
             </div>
             <div class="stat-card success">
-                <div class="stat-label">This Month</div>
+                <div class="stat-label">&#128200; This Month</div>
                 <div class="stat-value" id="stat-month-sales">Loading...</div>
-                <div class="stat-change up">Revenue</div>
+                <div class="stat-change up">Total revenue</div>
             </div>
             <div class="stat-card warning">
-                <div class="stat-label">Expenses</div>
+                <div class="stat-label">&#128184; Expenses</div>
                 <div class="stat-value" id="stat-expenses">Loading...</div>
                 <div class="stat-change down">This month</div>
             </div>
             <div class="stat-card danger">
-                <div class="stat-label">Low Stock</div>
+                <div class="stat-label">&#9888; Low Stock</div>
                 <div class="stat-value" id="stat-low-stock">Loading...</div>
                 <div class="stat-change">Items need attention</div>
             </div>
@@ -481,27 +496,49 @@ function renderDashboard() {
         <div class="grid-2">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Sales Trend (Last 7 Days)</div>
+                    <div class="card-title">&#128200; Sales Trend (Last 7 Days)</div>
                 </div>
-                <div class="chart-container" id="sales-chart">
-                    <div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Loading chart...</div></div>
+                <div class="chart-container" id="sales-chart" style="min-height: 220px;">
+                    <div class="empty-state" style="padding: 32px;">
+                        <div class="empty-icon" style="font-size: 32px;">&#128202;</div>
+                        <div class="empty-text">Loading chart...</div>
+                    </div>
                 </div>
             </div>
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Payment Methods</div>
+                    <div class="card-title">&#128179; Payment Methods</div>
                 </div>
-                <div class="chart-container" id="payment-chart">
-                    <div class="empty-state"><div class="empty-icon">💳</div><div class="empty-text">Loading...</div></div>
+                <div class="chart-container" id="payment-chart" style="min-height: 220px;">
+                    <div class="empty-state" style="padding: 32px;">
+                        <div class="empty-icon" style="font-size: 32px;">&#128179;</div>
+                        <div class="empty-text">Loading...</div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">Top Products (This Month)</div>
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">&#127795; Top Products (This Month)</div>
+                </div>
+                <div id="top-products-table">
+                    <div class="empty-state" style="padding: 32px;">
+                        <div class="empty-icon" style="font-size: 32px;">&#127795;</div>
+                        <div class="empty-text">Loading...</div>
+                    </div>
+                </div>
             </div>
-            <div id="top-products-table">
-                <div class="empty-state"><div class="empty-icon">🪵</div><div class="empty-text">Loading...</div></div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">&#128203; Recent Activity</div>
+                </div>
+                <div id="recent-activity">
+                    <div class="empty-state" style="padding: 32px;">
+                        <div class="empty-icon" style="font-size: 32px;">&#128203;</div>
+                        <div class="empty-text">Recent sales and orders will appear here</div>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -513,132 +550,157 @@ async function initDashboardPage() {
         if (!result.success) {
             showToast('Failed to load dashboard: ' + (result.error || 'Unknown error'), 'error');
             // Show error state in cards
-            document.getElementById('stat-today-sales').textContent = 'Error';
-            document.getElementById('stat-month-sales').textContent = 'Error';
-            document.getElementById('stat-expenses').textContent = 'Error';
-            document.getElementById('stat-low-stock').textContent = 'Error';
+            const el1 = document.getElementById('stat-today-sales');
+            if (el1) el1.textContent = 'Error';
+            const el2 = document.getElementById('stat-month-sales');
+            if (el2) el2.textContent = 'Error';
+            const el3 = document.getElementById('stat-expenses');
+            if (el3) el3.textContent = 'Error';
+            const el4 = document.getElementById('stat-low-stock');
+            if (el4) el4.textContent = 'Error';
             return;
         }
 
         const data = result.dashboard;
 
-        document.getElementById('stat-today-sales').textContent = formatCurrency(data.today_sales?.total || 0);
-        document.getElementById('stat-today-count').textContent = (data.today_sales?.count || 0) + ' transactions';
-        document.getElementById('stat-month-sales').textContent = formatCurrency(data.month_sales?.total || 0);
-        document.getElementById('stat-expenses').textContent = formatCurrency(data.month_expenses?.total || 0);
-        document.getElementById('stat-low-stock').textContent = data.low_stock_count || 0;
+        // Update stat cards with null checks
+        const todaySales = document.getElementById('stat-today-sales');
+        if (todaySales) todaySales.textContent = formatCurrency(data.today_sales?.total || 0);
+
+        const todayCount = document.getElementById('stat-today-count');
+        if (todayCount) todayCount.textContent = (data.today_sales?.count || 0) + ' transactions';
+
+        const monthSales = document.getElementById('stat-month-sales');
+        if (monthSales) monthSales.textContent = formatCurrency(data.month_sales?.total || 0);
+
+        const expenses = document.getElementById('stat-expenses');
+        if (expenses) expenses.textContent = formatCurrency(data.month_expenses?.total || 0);
+
+        const lowStock = document.getElementById('stat-low-stock');
+        if (lowStock) lowStock.textContent = data.low_stock_count || 0;
 
         // Render sales chart
-        if (data.sales_chart && data.sales_chart.length > 0) {
-            const maxVal = Math.max(...data.sales_chart.map(d => d.total || 0));
-            const chartHtml = `
-                <div class="bar-chart" style="padding: 16px 8px;">
-                    ${data.sales_chart.map(d => `
-                        <div class="bar-chart-item" style="flex: 1; min-width: 36px;">
-                            <div style="font-size: 10px; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${formatCurrency(d.total).replace('GHS ', '')}</div>
-                            <div class="bar-chart-bar" style="height: ${maxVal > 0 ? (d.total / maxVal * 140) : 4}px; background: linear-gradient(to top, var(--primary), var(--primary-light)); border-radius: 4px 4px 0 0; min-height: 4px;"></div>
-                            <div class="bar-chart-label" style="margin-top: 6px; font-size: 11px; color: var(--text-light);">${new Date(d.date).getDate()}/${new Date(d.date).getMonth()+1}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            document.getElementById('sales-chart').innerHTML = chartHtml;
-        } else {
-            document.getElementById('sales-chart').innerHTML = `
-                <div class="empty-state" style="padding: 32px;">
-                    <div class="empty-icon" style="font-size: 32px;">&#128202;</div>
-                    <div class="empty-text">No sales data yet</div>
-                </div>
-            `;
-        }
-
-        // Render payment breakdown
-        if (data.payment_breakdown && data.payment_breakdown.length > 0) {
-            const colors = ['#1a5f4a', '#f4a261', '#e76f51', '#74b9ff'];
-            const total = data.payment_breakdown.reduce((sum, p) => sum + (p.total || 0), 0);
-            let currentAngle = 0;
-
-            const pieHtml = `
-                <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap; justify-content: center; padding: 16px;">
-                    <div class="pie-chart" style="width: 140px; height: 140px; border-radius: 50%; background: conic-gradient(${data.payment_breakdown.map((p, i) => {
-                        const angle = (p.total / total) * 360;
-                        const start = currentAngle;
-                        currentAngle += angle;
-                        return `${colors[i % colors.length]} ${start}deg ${currentAngle}deg`;
-                    }).join(', ')}); box-shadow: inset 0 0 0 8px white;"></div>
-                    <div class="pie-chart-legend" style="display: flex; flex-direction: column; gap: 10px;">
-                        ${data.payment_breakdown.map((p, i) => `
-                            <div class="pie-legend-item" style="display: flex; align-items: center; gap: 8px;">
-                                <div class="pie-legend-color" style="background: ${colors[i % colors.length]}; width: 16px; height: 16px; border-radius: 4px;"></div>
-                                <span style="font-size: 13px; font-weight: 500;">${p.payment_method.toUpperCase()}: ${formatCurrency(p.total)} (${Math.round(p.total/total*100)}%) - ${p.count} sales</span>
+        const salesChart = document.getElementById('sales-chart');
+        if (salesChart) {
+            if (data.sales_chart && data.sales_chart.length > 0) {
+                const maxVal = Math.max(...data.sales_chart.map(d => d.total || 0));
+                salesChart.innerHTML = `
+                    <div class="bar-chart" style="width: 100%; padding: 16px 8px;">
+                        ${data.sales_chart.map(d => `
+                            <div class="bar-chart-item" style="flex: 1; min-width: 36px;">
+                                <div style="font-size: 10px; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${formatCurrency(d.total).replace('GHS ', '')}</div>
+                                <div class="bar-chart-bar" style="height: ${maxVal > 0 ? (d.total / maxVal * 140) : 4}px; background: linear-gradient(to top, var(--primary), var(--primary-light)); border-radius: 4px 4px 0 0; min-height: 4px;"></div>
+                                <div class="bar-chart-label" style="margin-top: 6px; font-size: 11px; color: var(--text-light);">${new Date(d.date).getDate()}/${new Date(d.date).getMonth()+1}</div>
                             </div>
                         `).join('')}
                     </div>
-                </div>
-            `;
-            document.getElementById('payment-chart').innerHTML = pieHtml;
-        } else {
-            document.getElementById('payment-chart').innerHTML = `
-                <div class="empty-state" style="padding: 32px;">
-                    <div class="empty-icon" style="font-size: 32px;">&#128179;</div>
-                    <div class="empty-text">No payment data yet</div>
-                </div>
-            `;
+                `;
+            } else {
+                salesChart.innerHTML = `
+                    <div class="empty-state" style="padding: 32px;">
+                        <div class="empty-icon" style="font-size: 32px;">&#128202;</div>
+                        <div class="empty-text">No sales data yet</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Render payment breakdown
+        const paymentChart = document.getElementById('payment-chart');
+        if (paymentChart) {
+            if (data.payment_breakdown && data.payment_breakdown.length > 0) {
+                const colors = ['#1a5f4a', '#f4a261', '#e76f51', '#74b9ff'];
+                const total = data.payment_breakdown.reduce((sum, p) => sum + (p.total || 0), 0);
+                let currentAngle = 0;
+
+                paymentChart.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap; justify-content: center; padding: 16px;">
+                        <div class="pie-chart" style="width: 140px; height: 140px; border-radius: 50%; background: conic-gradient(${data.payment_breakdown.map((p, i) => {
+                            const angle = (p.total / total) * 360;
+                            const start = currentAngle;
+                            currentAngle += angle;
+                            return `${colors[i % colors.length]} ${start}deg ${currentAngle}deg`;
+                        }).join(', ')}); box-shadow: inset 0 0 0 8px white;"></div>
+                        <div class="pie-chart-legend" style="display: flex; flex-direction: column; gap: 10px;">
+                            ${data.payment_breakdown.map((p, i) => `
+                                <div class="pie-legend-item" style="display: flex; align-items: center; gap: 8px;">
+                                    <div class="pie-legend-color" style="background: ${colors[i % colors.length]}; width: 16px; height: 16px; border-radius: 4px;"></div>
+                                    <span style="font-size: 13px; font-weight: 500;">${p.payment_method.toUpperCase()}: ${formatCurrency(p.total)} (${Math.round(p.total/total*100)}%) - ${p.count} sales</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                paymentChart.innerHTML = `
+                    <div class="empty-state" style="padding: 32px;">
+                        <div class="empty-icon" style="font-size: 32px;">&#128179;</div>
+                        <div class="empty-text">No payment data yet</div>
+                    </div>
+                `;
+            }
         }
 
         // Render top products
-        if (data.top_products && data.top_products.length > 0) {
-            const tableHtml = `
-                <div class="table-container table-responsive">
-                    <table class="table">
-                        <thead><tr><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead>
-                        <tbody>
-                            ${data.top_products.map(p => `
-                                <tr>
-                                    <td data-label="Product">${escapeHtml(p.name)}</td>
-                                    <td data-label="Qty">${p.total_qty || 0}</td>
-                                    <td data-label="Revenue">${formatCurrency(p.total_revenue || 0)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            document.getElementById('top-products-table').innerHTML = tableHtml;
-        } else {
-            document.getElementById('top-products-table').innerHTML = `
-                <div class="empty-state" style="padding: 32px;">
-                    <div class="empty-icon" style="font-size: 32px;">&#127795;</div>
-                    <div class="empty-text">No product sales yet</div>
+        const topProducts = document.getElementById('top-products-table');
+        if (topProducts) {
+            if (data.top_products && data.top_products.length > 0) {
+                topProducts.innerHTML = `
+                    <div class="table-container table-responsive">
+                        <table class="table">
+                            <thead><tr><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead>
+                            <tbody>
+                                ${data.top_products.map(p => `
+                                    <tr>
+                                        <td data-label="Product">${escapeHtml(p.name)}</td>
+                                        <td data-label="Qty">${p.total_qty || 0}</td>
+                                        <td data-label="Revenue">${formatCurrency(p.total_revenue || 0)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                topProducts.innerHTML = `
+                    <div class="empty-state" style="padding: 32px;">
+                        <div class="empty-icon" style="font-size: 32px;">&#127795;</div>
+                        <div class="empty-text">No product sales yet</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Recent activity
+        const recentActivity = document.getElementById('recent-activity');
+        if (recentActivity) {
+            recentActivity.innerHTML = `
+                <div style="padding: 16px;">
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px;">
+                            <div style="font-size: 24px;">&#128722;</div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 14px;">Sales Activity</div>
+                                <div style="font-size: 12px; color: var(--text-light);">${data.today_sales?.count || 0} sales today</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px;">
+                            <div style="font-size: 24px;">&#128230;</div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 14px;">Pending Orders</div>
+                                <div style="font-size: 12px; color: var(--text-light);">${data.pending_orders || 0} orders awaiting delivery</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
         }
-
-        // Recent activity placeholder
-        document.getElementById('recent-activity').innerHTML = `
-            <div style="padding: 16px;">
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px;">
-                        <div style="font-size: 24px;">&#128722;</div>
-                        <div>
-                            <div style="font-weight: 600; font-size: 14px;">Sales Activity</div>
-                            <div style="font-size: 12px; color: var(--text-light);">${data.today_sales?.count || 0} sales today</div>
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px;">
-                        <div style="font-size: 24px;">&#128203;</div>
-                        <div>
-                            <div style="font-weight: 600; font-size: 14px;">Pending Orders</div>
-                            <div style="font-size: 12px; color: var(--text-light);">${data.pending_orders || 0} orders awaiting delivery</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
 
         // Low stock alerts
         if (data.low_stock_items && data.low_stock_items.length > 0) {
             showToast(data.low_stock_items.length + ' products are low on stock!', 'warning', 5000);
+            // Also show browser notification
+            showBrowserNotification('Low Stock Alert', data.low_stock_items.length + ' products are running low on stock!');
         }
     } catch (error) {
         console.error('Dashboard error:', error);
@@ -3312,5 +3374,122 @@ async function updateNotificationBadge() {
                 badge.classList.add('hidden');
             }
         }
+    }
+}
+
+// ==================== BROWSER NOTIFICATION API ====================
+
+async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+        console.log('Browser notifications not supported');
+        return false;
+    }
+
+    if (Notification.permission === 'granted') {
+        return true;
+    }
+
+    if (Notification.permission === 'denied') {
+        return false;
+    }
+
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+}
+
+function showBrowserNotification(title, body, options = {}) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    const defaultOptions = {
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-192x192.png',
+        tag: 'timberpro-' + Date.now(),
+        requireInteraction: false,
+        silent: false,
+        ...options
+    };
+
+    try {
+        const notification = new Notification(title, {
+            body: body,
+            ...defaultOptions
+        });
+
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+            // Navigate to relevant page based on notification type
+            if (options.type === 'sale') {
+                loadPage('sales');
+            } else if (options.type === 'order') {
+                loadPage('orders');
+            } else if (options.type === 'stock') {
+                loadPage('inventory');
+            }
+        };
+
+        // Auto-close after 5 seconds unless requireInteraction is true
+        if (!defaultOptions.requireInteraction) {
+            setTimeout(() => notification.close(), 5000);
+        }
+
+        return notification;
+    } catch (e) {
+        console.error('Notification error:', e);
+    }
+}
+
+// Enhanced notification handler that shows both in-app and browser notifications
+async function showSystemNotification(type, title, message, data = {}) {
+    // Always show in-app toast
+    const toastType = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info';
+    showToast(message, toastType, data.duration || 4000);
+
+    // Show browser notification if permitted
+    if (type !== 'error') {
+        showBrowserNotification(title, message, {
+            type: type,
+            requireInteraction: type === 'stock' || type === 'order',
+            ...data
+        });
+    }
+
+    // Also save to backend notifications for the bell icon
+    try {
+        await API.post('/notifications', { type, title, message, data });
+    } catch (e) {
+        // Silently fail - backend notification is secondary
+    }
+}
+
+// Check for new notifications periodically
+async function checkNotifications() {
+    try {
+        const result = await API.get('/notifications/unread-count');
+        if (result.success && result.count > 0) {
+            const badge = document.getElementById('notification-badge');
+            if (badge) {
+                badge.textContent = result.count;
+                badge.classList.remove('hidden');
+            }
+
+            // Show browser notification for new notifications
+            if (Notification.permission === 'granted') {
+                const notifResult = await API.get('/notifications');
+                if (notifResult.success && notifResult.notifications) {
+                    const unread = notifResult.notifications.filter(n => !n.is_read);
+                    if (unread.length > 0) {
+                        const latest = unread[0];
+                        showBrowserNotification(latest.title, latest.message, {
+                            type: latest.type,
+                            requireInteraction: false
+                        });
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        // Silently fail
     }
 }
